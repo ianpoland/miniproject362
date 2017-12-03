@@ -424,23 +424,23 @@ void outchar(char x) {
     SCIDRL = x;
 }
 
-byte GetHighByte(word w)
+unsigned char GetHighByte(unsigned int w)
 {
-    return (byte)(w>>8)&0x00FF;
+    return (unsigned char)(w>>8)&0x00FF;
 }
 
-byte GetLowByte(word w)
+unsigned char GetLowByte(unsigned int w)
 {
-    return (byte)w&0x00FF;
+    return (unsigned char)w&0x00FF;
 }
 
 // returns the 12 bytes of the generated command packet
 // remember to call delete on the returned array
-word _CalculateChecksumOut(struct command_packet* pack)
+unsigned int _CalculateChecksumOut(struct command_packet* pack)
 {
-    byte* Parameter = pack->Parameter;
-    byte* command = pack-> command;
-    word w = 0;
+    unsigned char* Parameter = pack->Parameter;
+    unsigned char* command = pack-> command;
+    unsigned int w = 0;
     w += COMMAND_START_CODE_1;
     w += COMMAND_START_CODE_2;
     w += COMMAND_DEVICE_ID_1;
@@ -456,9 +456,9 @@ word _CalculateChecksumOut(struct command_packet* pack)
 }
 
 
-word byte_to_word(byte* arr)
+unsigned int byte_to_word(unsigned char* arr)
 {
-    word a = 0;
+    unsigned int a = 0;
     int i = 0;
     for(i = 0; i< 2; i++) {
         a += arr[i];
@@ -467,19 +467,135 @@ word byte_to_word(byte* arr)
     return a;
 }
 
-byte* GetPacketBytes(struct command_packet* pack)
+
+
+int CheckParsing(unsigned char b, unsigned char propervalue, unsigned char alternatevalue)
 {
-    byte* Parameter = pack->Parameter;
-    byte* command = pack-> command;
-    static byte packetbytes[12];
+    int retval = (b != propervalue) && (b != alternatevalue);
+    
+    return retval;
+}
+
+void Response_Packet(unsigned char* buffer, struct response_packet* pack)
+{
+    unsigned char* ParameterBytes = pack->ParameterBytes;
+    unsigned char* ResponseBytes = pack->ResponseBytes;
+    unsigned char* RawBytes = pack->RawBytes;
+    //CheckParsing(buffer[0], COMMAND_START_CODE_1, COMMAND_START_CODE_1, "COMMAND_START_CODE_1");
+    //CheckParsing(buffer[1], COMMAND_START_CODE_2, COMMAND_START_CODE_2, "COMMAND_START_CODE_2");
+    //CheckParsing(buffer[2], COMMAND_DEVICE_ID_1, COMMAND_DEVICE_ID_1, "COMMAND_DEVICE_ID_1");
+    //CheckParsing(buffer[3], COMMAND_DEVICE_ID_2, COMMAND_DEVICE_ID_2, "COMMAND_DEVICE_ID_2");
+    int z = 0;
+    z = CheckParsing(buffer[8], 0x30, 0x31);
+    if (buffer[8] == 0x30) {
+        ACK = 1;
+    }
+    else {
+        ACK = 0;
+    }
+    z = CheckParsing(buffer[9], 0x00, 0x00);
+    
+    unsigned int checksum = 0;
+    checksum = CalculateChecksumIn(buffer, 10);
+    unsigned char checksum_low = GetLowByte(checksum);
+    unsigned char checksum_high = GetHighByte(checksum);
+    CheckParsing(buffer[10], checksum_low, checksum_low);
+    CheckParsing(buffer[11], checksum_high, checksum_high);
+    
+    //int Error = ParseFromBytes(buffer[5], buffer[4]);
+    
+    ParameterBytes[0] = buffer[4];
+    ParameterBytes[1] = buffer[5];
+    ParameterBytes[2] = buffer[6];
+    ParameterBytes[3] = buffer[7];
+    ResponseBytes[0]=buffer[8];
+    ResponseBytes[1]=buffer[9];
+    int i = 0;
+    for (i=0; i < 12; i++)
+    {
+        RawBytes[i]=buffer[i];
+    }
+}
+
+unsigned int CalculateChecksumIn(unsigned char* buffer, int length)
+{
+    unsigned int checksum = 0;
+    for (int i=0; i<length; i++)
+    {
+        checksum +=buffer[i];
+    }
+    return checksum;
+}
+
+void input_cmd(unsigned char cmd, unsigned char* arr ) {
+    arr[0] = 0x00;
+    arr[1] = cmd;
+}
+
+void open() {
+    
+    struct command_packet cp;
+    input_cmd(Open, cp.command);
+    cp.Parameter[0] = 0x00;
+    cp.Parameter[1] = 0x00;
+    cp.Parameter[2] = 0x00;
+    cp.Parameter[3] = 0x00;
+    unsigned char* packetbytes = GetPacketBytes(&cp);
+    SendCommand(packetbytes, 12);
+    struct response_packet* rp = GetResponse();
+    
+    return ;
+}
+
+void close()
+{
+    
+    struct command_packet cp;
+    input_cmd(Close, cp.command);
+    cp.Parameter[0] = 0x00;
+    cp.Parameter[1] = 0x00;
+    cp.Parameter[2] = 0x00;
+    cp.Parameter[3] = 0x00;
+    unsigned char* packetbytes = GetPacketBytes(&cp);
+    SendCommand(packetbytes, 12);
+    struct response_packet* rp = GetResponse();
+    
+}
+
+void ParameterFromInt(int i, unsigned char* Parameter)
+{
+    Parameter[0] = (i & 0x000000ff);
+    Parameter[1] = (i & 0x0000ff00) >> 8;
+    Parameter[2] = (i & 0x00ff0000) >> 16;
+    Parameter[3] = (i & 0xff000000) >> 24;
+}
+
+void SendCommand(unsigned char cmd[], int length)
+{
+    
+}
+
+struct response_packet* GetResponse() {
+    static struct response_packet rp;
+    
+    
+    return &rp;
+}
+
+unsigned char* GetPacketBytes(struct command_packet* pack)
+{
+    unsigned char* Parameter = pack->Parameter;
+    unsigned char* command = pack-> command;
+    static unsigned char packetbytes[12];
     
     // update command before calculating checksum (important!)
-    word cmd = byte_to_word(command);
+    unsigned int cmd = byte_to_word(command);
     command[0] = GetLowByte(cmd);
     command[1] = GetHighByte(cmd);
     
-    word checksum = _CalculateChecksumOut(pack);
-    
+     int checksum = 0;
+    checksum = _CalculateChecksumOut(pack);
+
     packetbytes[0] = COMMAND_START_CODE_1;
     packetbytes[1] = COMMAND_START_CODE_2;
     packetbytes[2] = COMMAND_DEVICE_ID_1;
@@ -497,116 +613,6 @@ byte* GetPacketBytes(struct command_packet* pack)
 }
 
 
-int CheckParsing(byte b, byte propervalue, byte alternatevalue, const char* varname)
-{
-    int retval = (b != propervalue) && (b != alternatevalue);
-    
-    return retval;
-}
-
-void Response_Packet(byte* buffer, struct response_packet* pack)
-{
-    byte* ParameterBytes = pack->ParameterBytes;
-    byte* ResponseBytes = pack->ResponseBytes;
-    byte* RawBytes = pack->RawBytes;
-    //CheckParsing(buffer[0], COMMAND_START_CODE_1, COMMAND_START_CODE_1, "COMMAND_START_CODE_1");
-    //CheckParsing(buffer[1], COMMAND_START_CODE_2, COMMAND_START_CODE_2, "COMMAND_START_CODE_2");
-    //CheckParsing(buffer[2], COMMAND_DEVICE_ID_1, COMMAND_DEVICE_ID_1, "COMMAND_DEVICE_ID_1");
-    //CheckParsing(buffer[3], COMMAND_DEVICE_ID_2, COMMAND_DEVICE_ID_2, "COMMAND_DEVICE_ID_2");
-    CheckParsing(buffer[8], 0x30, 0x31, "AckNak_LOW");
-    if (buffer[8] == 0x30) {
-        ACK = 1;
-    }
-    else
-        ACK = 0;
-    
-    CheckParsing(buffer[9], 0x00, 0x00, "AckNak_HIGH");
-    
-    word checksum = CalculateChecksumIn(buffer, 10);
-    byte checksum_low = GetLowByte(checksum);
-    byte checksum_high = GetHighByte(checksum);
-    CheckParsing(buffer[10], checksum_low, checksum_low, "Checksum_LOW");
-    CheckParsing(buffer[11], checksum_high, checksum_high, "Checksum_HIGH");
-    
-    //int Error = ParseFromBytes(buffer[5], buffer[4]);
-    
-    ParameterBytes[0] = buffer[4];
-    ParameterBytes[1] = buffer[5];
-    ParameterBytes[2] = buffer[6];
-    ParameterBytes[3] = buffer[7];
-    ResponseBytes[0]=buffer[8];
-    ResponseBytes[1]=buffer[9];
-    for (int i=0; i < 12; i++)
-    {
-        RawBytes[i]=buffer[i];
-    }
-}
-
-word CalculateChecksumIn(byte* buffer, int length)
-{
-    word checksum = 0;
-    for (int i=0; i<length; i++)
-    {
-        checksum +=buffer[i];
-    }
-    return checksum;
-}
-
-void input_cmd(byte cmd, byte* arr ) {
-    arr[0] = 0x00;
-    arr[1] = cmd;
-}
-
-void open() {
-    
-    struct command_packet cp;
-    input_cmd(Open, cp.command);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    byte* packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    struct response_packet* rp = GetResponse();
-    
-    return ;
-}
-
-void close()
-{
-    
-    struct command_packet cp;
-    input_cmd(Close, cp.command);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    byte* packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    struct response_packet* rp = GetResponse();
-    
-}
-
-void ParameterFromInt(int i, byte* Parameter)
-{
-    Parameter[0] = (i & 0x000000ff);
-    Parameter[1] = (i & 0x0000ff00) >> 8;
-    Parameter[2] = (i & 0x00ff0000) >> 16;
-    Parameter[3] = (i & 0xff000000) >> 24;
-}
-
-void SendCommand(byte cmd[], int length)
-{
-    
-}
-
-struct response_packet* GetResponse() {
-    static struct response_packet rp;
-    
-    
-    return &rp;
-}
-
 
 int is_press_finger()
 {
@@ -618,7 +624,7 @@ int is_press_finger()
     cp.Parameter[1] = 0x00;
     cp.Parameter[2] = 0x00;
     cp.Parameter[3] = 0x00;
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     //printf("packet bytes:\n");
     //for (int i = 0; i < 12; i++) {
     //	printf("Parameter[%d]: %x\n", i, packetbytes[i]);
@@ -646,7 +652,7 @@ int ChangeBaudRate(unsigned long baud)
         struct command_packet cp;
         input_cmd(Close, cp.command);
         ParameterFromInt(baud, cp.Parameter);
-        byte* packetbytes = GetPacketBytes(&cp);
+        unsigned char* packetbytes = GetPacketBytes(&cp);
         ;
         SendCommand(packetbytes, 12);
         struct response_packet* rp = GetResponse();
@@ -678,7 +684,7 @@ int SetLED(int on)
     cp.Parameter[1] = 0x00;
     cp.Parameter[2] = 0x00;
     cp.Parameter[3] = 0x00;
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = 1;
@@ -687,7 +693,7 @@ int SetLED(int on)
     return retval;
 }
 
-int IntFromParameter(byte* ParameterBytes) {
+int IntFromParameter(unsigned char* ParameterBytes) {
     int retval = 0;
     retval = (retval << 8) + ParameterBytes[3];
     retval = (retval << 8) + ParameterBytes[2];
@@ -704,7 +710,7 @@ int get_enroll_count()
     cp.Parameter[1] = 0x00;
     cp.Parameter[2] = 0x00;
     cp.Parameter[3] = 0x00;
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     
@@ -719,7 +725,7 @@ int check_enrolled(int id)
     struct command_packet cp;
     input_cmd(CheckEnrolled, cp.command);
     ParameterFromInt(id, cp.Parameter);
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     
     SendCommand(packetbytes, 12);
     
@@ -734,7 +740,7 @@ int enroll_start(int id)
     struct command_packet cp;
     input_cmd(EnrollStart, cp.command);
     ParameterFromInt(id, cp.Parameter);
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = 0;
@@ -755,7 +761,7 @@ int enroll1()
 {
     struct command_packet cp;
     input_cmd(Enroll1, cp.command);
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = IntFromParameter(rp->ParameterBytes);
@@ -782,7 +788,7 @@ int enroll2()
 {
     struct command_packet cp;
     input_cmd(Enroll2, cp.command);
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = IntFromParameter(rp->ParameterBytes);
@@ -809,7 +815,7 @@ int enroll3()
 {
     struct command_packet cp;
     input_cmd(Enroll3, cp.command);
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = IntFromParameter(rp->ParameterBytes);
@@ -836,7 +842,7 @@ int identify1_N()
 {
     struct command_packet cp;
     input_cmd(Enroll3, cp.command);
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = IntFromParameter(rp->ParameterBytes);
@@ -858,7 +864,7 @@ int capture_finger(int highquality)
     {
         ParameterFromInt(0, cp.Parameter);
     }
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = ACK;
@@ -871,17 +877,9 @@ int delete_ID(int id)
     struct command_packet cp;
     input_cmd(DeleteID, cp.command);
     ParameterFromInt(id, cp.Parameter);
-    byte* packetbytes = GetPacketBytes(&cp);
+    unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     int retval = ACK;
     return retval;
 }
-
-
-
-
-
-
-
-
