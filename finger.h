@@ -68,31 +68,25 @@
 #define INVALID						 0XFFFF	// Used when parsing fails
 
 
-
-typedef unsigned char byte;
-typedef unsigned int word;
-
-
-
 struct command_packet {
-    byte Parameter[4]; // 4 bytes
-    byte command[2];  // 2 bytes
+    unsigned char Parameter[4]; // 4 bytes
+    unsigned char command[2];  // 2 bytes
 
 };
 
 struct response_packet {
-    byte* RawBytes;
-    byte* ParameterBytes;
-    byte* ResponseBytes;
+    unsigned char* RawBytes;
+    unsigned char* ParameterBytes;
+    unsigned char* ResponseBytes;
 
 };
 
-byte* GetPacketBytes();							// returns the bytes to be transmitted
-void ParameterFromInt(int i, byte* Parameter);
+unsigned char* GetPacketBytes();							// returns the bytes to be transmitted
+void ParameterFromInt(int i, unsigned char* Parameter);
 
-word _CalculateChecksumOut(struct command_packet* pack);						// Checksum is calculated using byte addition
-byte GetHighByte(word w);
-byte GetLowByte(word w);
+unsigned int _CalculateChecksumOut(struct command_packet* pack);						// Checksum is calculated using byte addition
+unsigned char GetHighByte(unsigned int w);
+unsigned char GetLowByte(unsigned int w);
 
 
 //Initialises the device and gets ready for commands
@@ -191,13 +185,13 @@ int identify1_N();
 int capture_finger(int highquality);
 
 
-int CheckParsing(byte b, byte propervalue, byte alternatevalue, const char* varname);
-void Response_Packet(byte* buffer, struct response_packet* pack);
-word CalculateChecksumIn(byte* buffer, int length);
-word byte_to_word(byte* arr);
-void input_cmd(byte cmd, byte* arr );
-void SendCommand(byte cmd[], int length);
+int CheckParsing(unsigned char b, unsigned char propervalue, unsigned char alternatevalue);
+void Response_Packet(unsigned char* buffer, struct response_packet* pack);
+unsigned int CalculateChecksumIn(unsigned char* buffer, int length);
+unsigned int byte_to_word(unsigned char* arr);
+void input_cmd(unsigned char cmd, unsigned char* arr );
+void SendCommand(unsigned char cmd[], int length);
 struct response_packet* GetResponse();
-int IntFromParameter(byte*);
+int IntFromParameter(unsigned char*);
 
 #endif /* serial_com_h */
