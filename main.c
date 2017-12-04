@@ -373,9 +373,8 @@ void SendCommand(byte cmd[], int length)
 {
     int i = 0;
     for(i = 0; i< length; i++) {
-        if(SCISR1) {
-            while(SCISR1_TDRE != 1){}
-            SCIDRL = cmd[i];
+       	while (!(SCISR1 & 0x80));
+        SCIDRL = cmd[i];
         }
         
     }
@@ -391,7 +390,7 @@ struct response_packet* GetResponse() {
     int done = 0;
     
     while (done == 0) {
-        while(SCISR1_RDRF != 1) {}
+        while (!(SCISR1 & 0x20));
         byte = SCIDRL;
         if(byte == COMMAND_START_CODE_1)
             done = 1;
@@ -400,7 +399,7 @@ struct response_packet* GetResponse() {
     packet[0] = byte;
     int x = 1;
     for (x = 1; x <12; x++) {
-        while(SCISR1_RDRF != 1) {}
+        while (!(SCISR1 & 0x80));
         packet[x] = SCIDRL;
         
     }
