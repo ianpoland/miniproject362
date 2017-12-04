@@ -17,6 +17,10 @@ void pmsglcd(char[]);
 void lcdwait_long(void);
 void lcdwait_tenSec(void);
 void _countdown(void);
+void clearlcd(void);
+void unlock(void);
+void lock(void);
+void stop(void);
 
 //Variable Declarations
 int rticnt = 0;
@@ -40,11 +44,13 @@ int prevLockButton = 0;
 int ACK = 1;
 int Error = 0x00;
 int pushbuttonsarefun = 0;
+int testing1 = 0;
+int change = 0;
 //int fuckthisshit =0;
 
 //MACROS
 /* ASCII character definitions */
-#define CR 0x0D	// ASCII return character   
+#define CR 0x0D	// ASCII return character   
 
 /* LCD COMMUNICATION BIT MASKS */
 #define RS 0x04		// RS pin mask (PTT[2])
@@ -64,14 +70,22 @@ int pushbuttonsarefun = 0;
 #define RED 0x40
 #define YELLOW 0x80
 
+/*
+***********************************************************************
+ Initializations
+***********************************************************************
+*/
+
 void initializations(void) {
-/* Set the PLL speed (bus clock = 24 MHz) */
+
+// Set the PLL speed (bus clock = 24 MHz) 
   CLKSEL = CLKSEL & 0x80; // disengage PLL from system
   PLLCTL = PLLCTL | 0x40; // turn on PLL
   SYNR = 0x02;            // set PLL multiplier
   REFDV = 0;              // set PLL divider
   while (!(CRGFLG & 0x08)){  }
   CLKSEL = CLKSEL | 0x80; // engage PLL
+
 
 /* Disable watchdog timer (COPCTL register) */
   COPCTL = 0x40;   //COP off, RTI and COP stopped in BDM-mode
@@ -85,16 +99,17 @@ void initializations(void) {
   PORTB  =  0x10; //assert DTR pin on COM port
                   
 /* Add additional port pin initializations here */
-    DDRAD = 0; 		//program port AD for input mode
+
+	  DDRAD = 0; 		//program port AD for input mode
     ATDDIEN = 0xC0; //program PAD7 and PAD6 pins as digital inputs
     DDRM = 0x30;
-	
 /* Initialize SPI for baud rate of 6 Mbs */
     SPIBR = 0x01; //x = 001, y = 000 => 0_-_0_-_
     SPICR1 = 0x50; //01_1_ _ _ _ 
     SPICR2 = 0;
 
 /* Initialize digital I/O port pins */
+
     PTM = 0x08;
     PTM = 0x00;
     DDRT = 0xFF;
@@ -117,20 +132,18 @@ void initializations(void) {
     ATDCTL3 = 0x10; //select active background mode
     ATDCTL4 = 0x85; //SELECT sample time = 2 ADC clks and set
                      //prescaler to 4 (2 MHz)
-  
-//Initialize PWM Module
+                     
     MODRR = 0x01;
     PWME = 0x01;
     PWMPOL = 0x01;
     PWMCAE = 0x00;
     PWMPER0 = 100;
-    PWMDTY0 = 50;
+    PWMDTY0 = 0;
     PWMCLK = 0x01;
     PWMCTL = 0x00;
     PWMPRCLK = 0x01;
-    PWMSCLA = 0x06;
-  
-// Initialize TIM Interrupt
+    PWMSCLA = 0x1E;
+
     TFLG1 = TFLG1 | 0x80; //enable timer subsystem
     TSCR1 = 0x80;
     TSCR2 = 0x0C;         //channel 7 for output compare
@@ -139,10 +152,34 @@ void initializations(void) {
     TC7 = 15000; //10 ms INTERRUPT RATE??      
 }
 
+void lock(){ //Counterclockwise
+  PWMDTY0 = 50;
+  PWMSCLA = 0x40;
+}
+
+void unlock() { //clockwise
+  PWMDTY0 = 50;
+  PWMSCLA = 0x07;
+}
+
+void stop() {
+  PWMDTY0 = 0;
+}
+
+void clearlcd() 
+{
+  chgline(LINE1);
+  pmsglcd("                ");
+  chgline(LINE2);
+  pmsglcd("                ");
+  chgline(LINE1);
+}
+
 void main(void){
   DisableInterrupts;
   initializations(); 		  			 		  		
   EnableInterrupts;
+  
   clearlcd();
 	
   pmsglcd("   TouchSafe:   ");
@@ -152,89 +189,90 @@ void main(void){
   clearlcd();
   pmsglcd("  Safe Is Open  ");  
 	
-  for(;;){
-  cycles = 35000;
+  for(;;) {
+    cycles = 70000;
   
-  if(testing1 == 1){
-     testing1 = 0;
-     pushbuttonsarefun = 1;
-     PTT_PTT1 = 0;
-     PTT_PTT0 = 0;     
-  }
-  if(LockFlag != 1){
-    if(LockDoor == 1){
-      DisableInterrupts;
-      clearlcd();
-      if (rghtpb == 1) { //If the print has been accepted
-        rghtpb = 0;
-	LockDoor = 0;
-        pmsglcd("Print Recognized");
-        lcdwait_long();
-        PWMSCLA = 0x0E;
-        while(cycles >= 0){
-          cycles = cycles-1;
-        }
-        PWMSCLA = 0x06;
-        PTT_PTT1 = 0;
-        PTT_PTT0 = 1;
-        wrongs = 0;
+    if (LockFlag == 1 && change == 0) {
+      chgline(LINE1);
+      pmsglcd("  Touch Screen  ");
+      chgline(LINE2);
+      pmsglcd(" To Gain Access ");
+    }
+    if(LockFlag == 1) {
+        DisableInterrupts;
         clearlcd();
-        pmsglcd(" Push Button On ");
-        chgline(LINE2);
-        pmsglcd(" Safe to Relock ");
-        lcdwait_long();        
-        clearlcd();
-        pmsglcd("  Safe Is Open  ");
-        LockFlag = 1;
-      } else { //Print Is NOT Accepted
-        clearlcd();
-        pmsglcd("  Error: Print  ");
-        chgline(LINE2);
-        pmsglcd(" Not Recognized ");
-        lcdwait_long();
-        wrongs += 1; 
-        if (wrongs == 3) {  //If you enter 3 consecutive incorrect prints, you are locked out for 9 Seconds
-          clearlcd();
-          pmsglcd(" Maximum Number ");
-          chgline(LINE2);
-          pmsglcd("Of Tries Reached");
+        if (leftpb == 1) { //If the print has been accepted
+          leftpb = 0;
+	        LockDoor = 0;
+          pmsglcd("Print Recognized");
           lcdwait_long();
-          clearlcd();
-          pmsglcd("Scanner Disabled");
-          chgline(LINE2);
-          pmsglcd("   For 9 Secs   ");
-          lockout = 9;
-          _countdown();
+          unlock();
+          while(cycles >= 0){
+            cycles = cycles-1;
+          }
+          stop();
+          PTT_PTT1 = 0;
+          PTT_PTT0 = 1;
           wrongs = 0;
           clearlcd();
+          pmsglcd(" Push Button On ");
+          chgline(LINE2);
+          pmsglcd(" Safe to Relock ");
+          lcdwait_long();        
+          clearlcd();
+          pmsglcd("  Safe Is Open  ");
+          LockFlag = 0;
         }
+        /*else { //Print Is NOT Accepted
+          clearlcd();
+          pmsglcd("  Error: Print  ");
+          chgline(LINE2);
+          pmsglcd(" Not Recognized ");
+          lcdwait_long();
+          wrongs += 1; 
+          if (wrongs == 3) {  //If you enter 3 consecutive incorrect prints, you are locked out for 9 Seconds
+            clearlcd();
+            pmsglcd(" Maximum Number ");
+            chgline(LINE2);
+            pmsglcd("Of Tries Reached");
+            lcdwait_long();
+            clearlcd();
+            pmsglcd("Scanner Disabled");
+            chgline(LINE2);
+            pmsglcd("   For 9 Secs   ");
+            lockout = 9;
+            _countdown();
+            wrongs = 0;
+            clearlcd();
+          }
+        }*/
+        EnableInterrupts;
+    }
+    if(LockFlag == 0){   
+      if(rghtpb == 1) { //Safe is Relocking; Input from Pushbutton
+        rghtpb = 0;
+        DisableInterrupts;
+        clearlcd();
+        pmsglcd(" Relocking Safe ");
+        lcdwait_long();
+        lock();
+        while(cycles >= 0){
+          cycles=cycles-1;
+        }
+        stop();
+        PTT_PTT1 = 1;
+        PTT_PTT0 = 0; 
+        chgline(LINE2);
+        pmsglcd(" Safe Is Locked ");
+        lcdwait_long();
+        clearlcd();        
+        LockFlag = 1;
+        EnableInterrupts;
+        change = 0;
       }
-      EnableInterrupts;
     }
   }
-  if(LockFlag != 0){   
-    if(rghtpb == 1) { //Safe is Relocking; Input from Pushbutton
-      rghtpb = 0;
-      DisableInterrupts;
-      clearlcd();
-      pmsglcd(" Relocking Safe ");
-      lcdwait_long();
-      PWMSCLA = 0x04;
-      while(cycles >= 0){
-        cycles=cycles-1;
-      }
-      PWMSCLA = 0x06;
-      PTT_PTT1 = 1;
-      PTT_PTT0 = 0; 
-      chgline(LINE2);
-      pmsglcd(" Safe Is Locked ");
-      lcdwait_long();
-      clearlcd();        
-      LockFlag = 0;
-      EnableInterrupts;
-    }
-  }
-}     	  
+}
 	  
 interrupt 15 void TIM_ISR(void)
 {
@@ -434,8 +472,17 @@ unsigned char GetLowByte(unsigned int w)
     return (unsigned char)w&0x00FF;
 }
 
-// returns the 12 bytes of the generated command packet
-// remember to call delete on the returned array
+unsigned int byte_to_word(unsigned char* arr)
+{
+    unsigned int a = 0;
+    int i = 0;
+    for(i = 0; i< 2; i++) {
+        a += arr[i];
+        a = a<<8;
+    }
+    return a;
+}
+
 unsigned int _CalculateChecksumOut(struct command_packet* pack)
 {
     unsigned char* Parameter = pack->Parameter;
@@ -455,17 +502,43 @@ unsigned int _CalculateChecksumOut(struct command_packet* pack)
     return w;
 }
 
-
-unsigned int byte_to_word(unsigned char* arr)
+unsigned char* GetPacketBytes(struct command_packet* pack)
 {
-    unsigned int a = 0;
-    int i = 0;
-    for(i = 0; i< 2; i++) {
-        a += arr[i];
-        a = a<<8;
-    }
-    return a;
+    unsigned char* Parameter = pack->Parameter;
+    unsigned char* command = pack-> command;
+    static unsigned char packetbytes[12];
+
+    // update command before calculating checksum (important!)
+    //unsigned int cmd = byte_to_word(command);
+    //command[0] = GetLowByte(cmd);
+    //command[1] = GetHighByte(cmd);
+    
+    unsigned int checksum = _CalculateChecksumOut(pack);
+    
+
+    packetbytes[0] = COMMAND_START_CODE_1;
+    packetbytes[1] = COMMAND_START_CODE_2;
+    packetbytes[2] = COMMAND_DEVICE_ID_1;
+    packetbytes[3] = COMMAND_DEVICE_ID_2;
+    packetbytes[4] = Parameter[0];
+    packetbytes[5] = Parameter[1];
+    packetbytes[6] = Parameter[2];
+    packetbytes[7] = Parameter[3];
+    packetbytes[8] = command[0];
+    packetbytes[9] = command[1];
+    packetbytes[10] = GetLowByte(checksum);
+    packetbytes[11] = GetHighByte(checksum);
+                         
+    return packetbytes;  
 }
+
+
+// returns the 12 bytes of the generated command packet
+// remember to call delete on the returned array
+
+
+
+
 
 
 
@@ -475,7 +548,7 @@ int CheckParsing(unsigned char b, unsigned char propervalue, unsigned char alter
     
     return retval;
 }
-
+/*
 void Response_Packet(unsigned char* buffer, struct response_packet* pack)
 {
     unsigned char* ParameterBytes = pack->ParameterBytes;
@@ -515,12 +588,13 @@ void Response_Packet(unsigned char* buffer, struct response_packet* pack)
     {
         RawBytes[i]=buffer[i];
     }
-}
+}*/ 
 
 unsigned int CalculateChecksumIn(unsigned char* buffer, int length)
 {
     unsigned int checksum = 0;
-    for (int i=0; i<length; i++)
+    int i = 0;
+    for (i=0; i<length; i++)
     {
         checksum +=buffer[i];
     }
@@ -534,15 +608,41 @@ void input_cmd(unsigned char cmd, unsigned char* arr ) {
 
 void open() {
     
-    struct command_packet cp;
-    input_cmd(Open, cp.command);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    unsigned char* packetbytes = GetPacketBytes(&cp);
+    //static struct command_packet cp;
+    //input_cmd(Open, cp.command);
+    //cp.Parameter[0] = 0x00;
+    //cp.Parameter[1] = 0x00;
+    //cp.Parameter[2] = 0x00;
+    //cp.Parameter[3] = 0x00;
+    //unsigned char* packetbytes = GetPacketBytes(&cp);
+    
+    // it appears that the 9s12 does not support structures
+    unsigned int w = 0;
+    w += COMMAND_START_CODE_1;
+    w += COMMAND_START_CODE_2;
+    w += COMMAND_DEVICE_ID_1;
+    w += COMMAND_DEVICE_ID_2;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += GetLowByte(Open);
+    w += GetHighByte(Open);
+    
+    packetbytes[0] = COMMAND_START_CODE_1;
+    packetbytes[1] = COMMAND_START_CODE_2;
+    packetbytes[2] = COMMAND_DEVICE_ID_1;
+    packetbytes[3] = COMMAND_DEVICE_ID_2;
+    packetbytes[4] = 0;
+    packetbytes[5] = 0;
+    packetbytes[6] = 0;
+    packetbytes[7] = 0;
+    packetbytes[8] = GetHighByte(Open);
+    packetbytes[9] = GetLowByte(Open);
+    packetbytes[10] = GetLowByte(w);
+    packetbytes[11] = GetHighByte(w);
     SendCommand(packetbytes, 12);
-    struct response_packet* rp = GetResponse();
+    //unsigned char* rp = GetResponse();
     
     return ;
 }
@@ -550,15 +650,34 @@ void open() {
 void close()
 {
     
-    struct command_packet cp;
-    input_cmd(Close, cp.command);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    unsigned char* packetbytes = GetPacketBytes(&cp);
+ static unsigned char packetbytes[12];
+    unsigned int w = 0;
+    w += COMMAND_START_CODE_1;
+    w += COMMAND_START_CODE_2;
+    w += COMMAND_DEVICE_ID_1;
+    w += COMMAND_DEVICE_ID_2;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += GetLowByte(Close);
+    w += GetHighByte(Close);
+    
+    packetbytes[0] = COMMAND_START_CODE_1;
+    packetbytes[1] = COMMAND_START_CODE_2;
+    packetbytes[2] = COMMAND_DEVICE_ID_1;
+    packetbytes[3] = COMMAND_DEVICE_ID_2;
+    packetbytes[4] = 0;
+    packetbytes[5] = 0;
+    packetbytes[6] = 0;
+    packetbytes[7] = 0;
+    packetbytes[8] = GetHighByte(Close);
+    packetbytes[9] = GetLowByte(Close);
+    packetbytes[10] = GetLowByte(w);
+    packetbytes[11] = GetHighByte(w);
     SendCommand(packetbytes, 12);
-    struct response_packet* rp = GetResponse();
+    SendCommand(packetbytes, 12);
+    //struct response_packet* rp = GetResponse();      
     
 }
 
@@ -570,76 +689,87 @@ void ParameterFromInt(int i, unsigned char* Parameter)
     Parameter[3] = (i & 0xff000000) >> 24;
 }
 
-void SendCommand(unsigned char cmd[], int length)
+void SendCommand(byte cmd[], int length)
 {
-    
+    int i = 0;
+    for(i = 0; i< length; i++) {
+       outchar(cmd[i]);
+    }
 }
 
-struct response_packet* GetResponse() {
-    static struct response_packet rp;
+unsigned char* GetResponse() {
+	  static unsigned char rp[8];
+    unsigned char packet[12];
+    unsigned char byte = 0x00;
+    
+    int done = 0;
+    
+    while (done == 0) {
+        while (!(SCISR1 & 0x20));
+        byte = SCIDRL;
+        if(byte == COMMAND_START_CODE_1)
+            done = 1;
+        
+    }
+    packet[0] = byte;
+    int x = 1;
+    for (x = 1; x <12; x++) {
+        while (!(SCISR1 & 0x80));
+        packet[x] = SCIDRL;
+        
+    }
+    rp[0] = packet[4];
+    rp[1] = packet[5];
+    rp[2] = packet[6];
+    rp[3] = packet[7];
+    rp[4]=  packet[8];
+    rp[5]=  packet[9];
     
     
-    return &rp;
+	return rp;
 }
+  
+/*
 
-unsigned char* GetPacketBytes(struct command_packet* pack)
-{
-    unsigned char* Parameter = pack->Parameter;
-    unsigned char* command = pack-> command;
-    static unsigned char packetbytes[12];
-    
-    // update command before calculating checksum (important!)
-    unsigned int cmd = byte_to_word(command);
-    command[0] = GetLowByte(cmd);
-    command[1] = GetHighByte(cmd);
-    
-     int checksum = 0;
-    checksum = _CalculateChecksumOut(pack);
-
-    packetbytes[0] = COMMAND_START_CODE_1;
-    packetbytes[1] = COMMAND_START_CODE_2;
-    packetbytes[2] = COMMAND_DEVICE_ID_1;
-    packetbytes[3] = COMMAND_DEVICE_ID_2;
-    packetbytes[4] = Parameter[0];
-    packetbytes[5] = Parameter[1];
-    packetbytes[6] = Parameter[2];
-    packetbytes[7] = Parameter[3];
-    packetbytes[8] = command[0];
-    packetbytes[9] = command[1];
-    packetbytes[10] = GetLowByte(checksum);
-    packetbytes[11] = GetHighByte(checksum);
-    
-    return packetbytes;
-}
-
-
+ 
 
 int is_press_finger()
 {
     
-    struct command_packet cp;
-    input_cmd(IsPressFinger, cp.command);
-    //printf("%x%x", cp.command[0], cp.command[1]);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    unsigned char* packetbytes = GetPacketBytes(&cp);
-    //printf("packet bytes:\n");
-    //for (int i = 0; i < 12; i++) {
-    //	printf("Parameter[%d]: %x\n", i, packetbytes[i]);
-    //}
+    unsigned int w = 0;
+    w += COMMAND_START_CODE_1;
+    w += COMMAND_START_CODE_2;
+    w += COMMAND_DEVICE_ID_1;
+    w += COMMAND_DEVICE_ID_2;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += GetLowByte(IsPressFinger);
+    w += GetHighByte(IsPressFinger);
     
+    packetbytes[0] = COMMAND_START_CODE_1;
+    packetbytes[1] = COMMAND_START_CODE_2;
+    packetbytes[2] = COMMAND_DEVICE_ID_1;
+    packetbytes[3] = COMMAND_DEVICE_ID_2;
+    packetbytes[4] = 0;
+    packetbytes[5] = 0;
+    packetbytes[6] = 0;
+    packetbytes[7] = 0;
+    packetbytes[8] = GetHighByte(IsPressFinger);
+    packetbytes[9] = GetLowByte(IsPressFinger);
+    packetbytes[10] = GetLowByte(w);
+    packetbytes[11] = GetHighByte(w);
     SendCommand(packetbytes, 12);
-    struct response_packet* rp = GetResponse();
-    int retval = 0;
-    int pval = rp->ParameterBytes[0];
-    pval += rp->ParameterBytes[1];
-    pval += rp->ParameterBytes[2];
-    pval += rp->ParameterBytes[3];
-    if (pval == 0)
-        retval = 1;
-    return retval;
+    //struct response_packet* rp = GetResponse();
+    //int retval = 0;
+    //int pval = rp->ParameterBytes[0];
+    //pval += rp->ParameterBytes[1];
+    //pval += rp->ParameterBytes[2];
+    //pval += rp->ParameterBytes[3];
+    //if (pval == 0)
+    //   retval = 1;
+    //return retval;  
     return 0;
 }
 
@@ -664,33 +794,52 @@ int ChangeBaudRate(unsigned long baud)
         }
         
         return retval;
-    }
+    }    
     return 0;
 }
 
 int SetLED(int on)
 {
-    struct command_packet cp;
-    input_cmd(CmosLed, cp.command);
+    unsigned int on_byte = 0;
     if (on)
     {
-        cp.Parameter[0] = 0x01;
+        on_byte = 0x01;
     }
     else
     {
         
-        cp.Parameter[0] = 0x00;
+        on_byte = 0x00;
     }
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    unsigned char* packetbytes = GetPacketBytes(&cp);
+    unsigned int w = 0;
+    w += COMMAND_START_CODE_1;
+    w += COMMAND_START_CODE_2;
+    w += COMMAND_DEVICE_ID_1;
+    w += COMMAND_DEVICE_ID_2;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += 0;
+    w += GetLowByte(CmosLed);
+    w += GetHighByte(CmosLed);
+    
+    packetbytes[0] = COMMAND_START_CODE_1;
+    packetbytes[1] = COMMAND_START_CODE_2;
+    packetbytes[2] = COMMAND_DEVICE_ID_1;
+    packetbytes[3] = COMMAND_DEVICE_ID_2;
+    packetbytes[4] = on_byte;
+    packetbytes[5] = 0;
+    packetbytes[6] = 0;
+    packetbytes[7] = 0;
+    packetbytes[8] = GetHighByte(CmosLed);
+    packetbytes[9] = GetLowByte(CmosLed);
+    packetbytes[10] = GetLowByte(w);
+    packetbytes[11] = GetHighByte(w);
     SendCommand(packetbytes, 12);
-    struct response_packet* rp = GetResponse();
+    //struct response_packet* rp = GetResponse();      
     int retval = 1;
-    if (ACK == 0)
-        retval = 0;
-    return retval;
+    //if (ACK == 0)
+    //    retval = 0;
+    return retval; 
 }
 
 int IntFromParameter(unsigned char* ParameterBytes) {
@@ -714,8 +863,8 @@ int get_enroll_count()
     SendCommand(packetbytes, 12);
     struct response_packet* rp = GetResponse();
     
-    int retval = IntFromParameter(rp->ParameterBytes);
-    
+    int retval = IntFromParameter(rp->ParameterBytes); 
+          int retval = 0;
     return retval;
 }
 
@@ -729,7 +878,7 @@ int check_enrolled(int id)
     
     SendCommand(packetbytes, 12);
     
-    struct response_packet* rp = GetResponse();
+    struct response_packet* rp = GetResponse();   
     int retval = 0;
     retval = ACK;
     return retval;
@@ -742,7 +891,7 @@ int enroll_start(int id)
     ParameterFromInt(id, cp.Parameter);
     unsigned char* packetbytes = GetPacketBytes(&cp);
     SendCommand(packetbytes, 12);
-    struct response_packet* rp = GetResponse();
+    struct response_packet* rp = GetResponse();      
     int retval = 0;
     if (ACK == 0)
     {
@@ -882,4 +1031,4 @@ int delete_ID(int id)
     struct response_packet* rp = GetResponse();
     int retval = ACK;
     return retval;
-}
+}                 */
