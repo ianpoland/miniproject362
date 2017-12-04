@@ -371,14 +371,51 @@ void ParameterFromInt(int i, byte* Parameter)
 
 void SendCommand(byte cmd[], int length)
 {
+    int i = 0;
+    for(i = 0; i< length; i++) {
+        if(SCISR1) {
+            while(SCISR1_TDRE != 1){}
+            SCIDRL = cmd[i];
+        }
+        
+    }
+    
     
 }
 
 struct response_packet* GetResponse() {
-    static struct response_packet rp;
+	static struct response_packet rp;
+    unsigned char packet[12];
+    unsigned char byte = 0x00;
     
+    int done = 0;
     
-    return &rp;
+    while (done == 0) {
+        while(SCISR1_RDRF != 1) {}
+        byte = SCIDRL;
+        if(byte == COMMAND_START_CODE_1)
+            done = 1;
+        
+    }
+    packet[0] = byte;
+    int x = 1;
+    for (x = 1; x <12; x++) {
+        while(SCISR1_RDRF != 1) {}
+        packet[x] = SCIDRL;
+        
+    }
+    unsigned char para[4];
+    unsigned char resp[2];
+    para[0] = packet[4];
+    para[1] = packet[5];
+    para[2] = packet[6];
+    para[3] = packet[7];
+    resp[0]=  packet[8];
+    resp[1]=  packet[9];
+    rp.ParameterBytes = para;
+    rp.ResponseBytes = resp;
+    
+	return &rp;
 }
 
 
