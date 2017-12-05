@@ -87,7 +87,7 @@ void ParameterFromInt(int i, unsigned char* Parameter);
 unsigned int _CalculateChecksumOut(struct command_packet* pack);						// Checksum is calculated using byte addition
 unsigned char GetHighByte(unsigned int w);
 unsigned char GetLowByte(unsigned int w);
-
+void Enroll(void);
 
 //Initialises the device and gets ready for commands
 void open();
