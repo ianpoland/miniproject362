@@ -57,6 +57,7 @@ int Error = 0x00;
 int pushbuttonsarefun = 0;
 int testing1 = 0;
 int change = 0;
+int id = 0;
 //int fuckthisshit =0;
 
 //MACROS
@@ -126,7 +127,7 @@ void initializations(void) {
     DDRT = 0xFF;
     PTT = 0x00;
     
-    open();
+  
 
 // Initialize the LCD
     PTT_PTT4 = 0x1; //LCDCLK = 0x1;
@@ -162,7 +163,12 @@ void initializations(void) {
     TSCR2 = 0x0C;         //channel 7 for output compare
     TIOS = 0x80;
     TIE = 0x80; //disable interrupts
-    TC7 = 15000; //10 ms INTERRUPT RATE??      
+    TC7 = 15000; //10 ms INTERRUPT RATE?? 
+    
+    
+    // Sams inits
+    open();
+    SetLED(true);
 }
 
 void lock(){ //Counterclockwise
@@ -204,6 +210,32 @@ void main(void){
 	
   for(;;) {
     cycles = 70000;
+    id = 0
+    
+    
+    if(IsPressFinger()) {
+    	
+	clearlcd();
+	chgline(LINE1);
+	pmsglcd("Examining...");	
+	
+    
+    	CaptureFinger(false);
+    	id = Identify1_N();
+	if (id <20) {
+		chgline(LINE2);
+		pmsglcd("Print Found!");
+		LockFlag = 1;
+	}
+	else {
+		chgline(LINE2);
+		pmsglcd("Print not Found");
+		LockFlag = 0;
+	}
+    
+    }
+    
+    
   
     if (LockFlag == 1 && change == 0) {
       chgline(LINE1);
