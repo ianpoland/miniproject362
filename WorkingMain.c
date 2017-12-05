@@ -169,7 +169,64 @@ void initializations(void) {
     // Sams inits
     open();
     SetLED(true);
+	
+	
+    // enroll finger prints
+   clearlcd();
+   pmsglcd("enrolling prints:");
+   chgline(LINE2);
+   pmsglcd("Press finger:");
+   Enroll();
+   
+   
+   	
 }
+void Enroll(void) {
+	int capted = 0;
+	while(IsPressFinger() != 1);
+	capted = capture_finger(1);
+	if (capted == 1) {
+		enroll_start(0)
+		clearlcd();
+   		pmsglcd("remove finger");
+		enroll1();
+		while(IsPressFinger() == 1);
+		clearlcd();
+		pmsglcd("press again");
+		while(IsPressFinger() 1= 1);
+		capted = capture_finger(1);
+		if (capted == 1) { 
+			clearlcd();
+			pmsglcd("remove finger");
+			enroll2();
+			while(IsPressFinger() == 1);
+			clearlcd();
+			pmsglcd("press again");
+			while(IsPressFinger() 1= 1);
+			capted = capture_finger(1);
+			if (capted == 1) { 
+				clearlcd();
+				pmsglcd("remove finger");
+				enroll3();
+			}
+			else {
+				clearlcd();
+				pmsglcd("failed 3rd");
+			}
+		}
+		else {
+			clearlcd();
+			pmsglcd("failed 2nd");
+		}
+			
+	}
+	else {
+		clearlcd();
+   		pmsglcd("Could not read");
+	}
+	return;
+}
+
 
 void lock(){ //Counterclockwise
   PWMDTY0 = 50;
@@ -220,7 +277,7 @@ void main(void){
 	pmsglcd("Examining...");	
 	
     
-    	CaptureFinger(false);
+    	capture_finger(0);
     	id = Identify1_N();
 	if (id <20) {
 		chgline(LINE2);
@@ -735,6 +792,14 @@ char* GetResponse(void) {
     rp[3] = packet[7];
     rp[4]=  packet[8];
     rp[5]=  packet[9];
+	
+    if (packet[8] == 0x30){ 
+	    ACK = 1;
+    }
+    else {
+	    ACK = 0;
+    }
+	    
     
     
 	return rp;
