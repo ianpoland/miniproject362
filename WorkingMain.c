@@ -46,7 +46,6 @@ int ACK = 1;
 int Error = 0x00;
 int pushbuttonsarefun = 0;
 int testing1 = 0;
-int change = 0;
 int id = 0;
 //int fuckthisshit =0;
 
@@ -94,7 +93,7 @@ void initializations(void) {
 
 /* Initialize asynchronous serial port (SCI) for 9600 baud, no interrupts */
   SCIBDH =  0x00; //set baud rate to 9600
-  SCIBDL =  0x9C; //24,000,000 / 16 / 156 = 9600 (approx)  
+  SCIBDL =  0x9c; //24,000,000 / 16 / 156 = 9600 (approx)  
   SCICR1 =  0x00; //$9C = 156
   SCICR2 =  0x0C; //initialize SCI for program-driven operation
   DDRB   =  0x10; //set PB4 for output mode
@@ -154,17 +153,8 @@ void initializations(void) {
     TC7 = 15000; //10 ms INTERRUPT RATE?? 
 
   // Sams inits
-    open();            // comment out
-    SetLED(1);         // comment out
-	
-	
-    // enroll finger prints
-   clearlcd();
-   pmsglcd("enrolling prints:");
-   chgline(LINE2);
-   pmsglcd("Press finger:");
-   Enroll();       // comment out
-          
+   
+
 }
 
 void Enroll(void) {
@@ -215,12 +205,12 @@ void Enroll(void) {
 	return;
 }
 
-void lock(){ //Counterclockwise
+void unlock(){ //Counterclockwise
   PWMDTY0 = 50;
   PWMSCLA = 0x40;
 }
 
-void unlock() { //clockwise
+void lock() { //clockwise
   PWMDTY0 = 50;
   PWMSCLA = 0x07;
 }
@@ -242,9 +232,7 @@ void main(void){
   DisableInterrupts;
   initializations(); 		  			 		  		
   EnableInterrupts;
-  
-  
-  
+    
   clearlcd();
 	
   pmsglcd("   TouchSafe:   ");
@@ -257,28 +245,25 @@ void main(void){
   for(;;) {
     cycles = 70000;
     id = 0;
-    /*
-    if(is_press_finger()) {
-    	
-      	clearlcd();
-      	chgline(LINE1);
-      	pmsglcd("Examining...");	
-        capture_finger(0);
-        id = identify1_N();
-      	if (id <20) {
-      		chgline(LINE2);
-      		pmsglcd("Print Found!");
-      		leftpb = 1;
-      	}
-      	else {
-      		chgline(LINE2);
-      		pmsglcd("Print not Found");
-      		rghtpb = 0;
-      	}
-    
+  /*
+    if(is_press_finger()) {   	
+    	clearlcd();
+     	chgline(LINE1);
+     	pmsglcd("Examining...");	
+       capture_finger(0);
+       id = identify1_N();
+     	if (id <20) {
+     		chgline(LINE2);
+     		pmsglcd("Print Found!");
+     		leftpb = 1;
+     	}
+     	else {
+     		chgline(LINE2);
+     		pmsglcd("Print not Found");
+     		rghtpb = 0;
+     	}
     } */
-  
-    if (LockFlag == 1 && change == 0) {
+    if (LockFlag == 1) {
       chgline(LINE1);
       pmsglcd("  Touch Screen  ");
       chgline(LINE2);
@@ -286,8 +271,8 @@ void main(void){
     }
     if(LockFlag == 1) {
         DisableInterrupts;
-        clearlcd();
-        if (leftpb == 1) { //If the print has been accepted
+        if (leftpb == 1) { //If the print has been accepted         
+          clearlcd();
           leftpb = 0;
 	        LockDoor = 0;
           pmsglcd("Print Recognized");
@@ -354,7 +339,6 @@ void main(void){
         clearlcd();        
         LockFlag = 1;
         EnableInterrupts;
-        change = 0;
       }
     }
   }
@@ -612,8 +596,8 @@ unsigned char* GetPacketBytes(struct command_packet* pack)
     packetbytes[7] = Parameter[3];
     packetbytes[8] = command[0];
     packetbytes[9] = command[1];
-    packetbytes[10] = GetLowByte(checksum);
-    packetbytes[11] = GetHighByte(checksum);
+    packetbytes[10]= GetLowByte(checksum);
+    packetbytes[11]= GetHighByte(checksum);
                          
     return packetbytes;  
 }
@@ -706,14 +690,8 @@ void open() {
     cp.Parameter[2] = 0x00;
     cp.Parameter[3] = 0x00;
     packetbytes = GetPacketBytes(&cp);
-    
     SendCommand(packetbytes, 12);
     rp = GetResponse();
-    for (i = 0; i < 6; i++) {
-      outchar(rp[i]);
-    }
-    
-    
     return ;
 }
 
@@ -754,20 +732,22 @@ void SendCommand(unsigned char cmd[12], int length)
 char* GetResponse(void) {
 	  char rp[6];
 	  int x = 1;
-    unsigned char packet[12];
+    
+    char packet[12];
     char byte = 0x00;
     int done = 0;
     
-    while (done == 0) {
+    /*while (done == 0) {
         byte = inchar();
-        if(byte == COMMAND_START_CODE_1)
+    if(byte == COMMAND_START_CODE_1)
             done = 1;
         
-    }
-    packet[0] = byte;
+    }*/
+    //packet[0] = byte;
     
-    for (x = 1; x <12; x++) {
-        packet[x] = inchar();
+    for (x = 0; x <12; x++) {
+        byte = inchar();
+        packet[x] = byte;
         
     }
     rp[0] = packet[4];
@@ -861,12 +841,15 @@ int SetLED(int on)
     cp.Parameter[2] = 0x00;
     cp.Parameter[3] = 0x00;
     packetbytes = GetPacketBytes(&cp);
+    lcdwait();
+    lcdwait();
     SendCommand(packetbytes, 12);
     rp = GetResponse();      
     
-    if (ACK == 0)
-        retval = 0;
-    return retval; 
+    //if (ACK == 0)
+    //    retval = 0;
+    //return retval; 
+      return 0;
 }
 
 int IntFromParameter(char* ParameterBytes) {
