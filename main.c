@@ -1,7 +1,7 @@
 #include <hidef.h>      /* common defines and macros */
 #include "derivative.h"      /* derivative-specific definitions */
 #include <mc9s12c32.h>
-#include "finger.h"
+
 
 //Function  Declarations
 
@@ -21,6 +21,7 @@ void clearlcd(void);
 void unlock(void);
 void lock(void);
 void stop(void);
+int scan(void);
 unsigned char inchar(void);
 
 //Variable Declarations
@@ -42,11 +43,9 @@ char prevpbr  = 0;
 int LockDoor = 0;
 int prevTest1 = 0;
 int prevLockButton = 0;
-int ACK = 1;
-int Error = 0x00;
 int pushbuttonsarefun = 0;
 int testing1 = 0;
-int id = 0;
+
 //int fuckthisshit =0;
 
 //MACROS
@@ -102,7 +101,7 @@ void initializations(void) {
 /* Add additional port pin initializations here */
 
 	  DDRAD = 0; 		//program port AD for input mode
-    ATDDIEN = 0xC0; //program PAD7 and PAD6 pins as digital inputs
+    ATDDIEN = 0xc7; //program PAD7 and PAD6 pins as digital inputs
     DDRM = 0x30;
 /* Initialize SPI for baud rate of 6 Mbs */
     SPIBR = 0x01; //x = 001, y = 000 => 0_-_0_-_
@@ -115,6 +114,7 @@ void initializations(void) {
     PTM = 0x00;
     DDRT = 0xFF;
     PTT = 0x00;
+   
 
 // Initialize the LCD
     PTT_PTT4 = 0x1; //LCDCLK = 0x1;
@@ -153,57 +153,31 @@ void initializations(void) {
     TC7 = 15000; //10 ms INTERRUPT RATE?? 
 
   // Sams inits
+    PTT_PTT4 = 0;
+    PTT_PTT5 = 0;
+    
+  
+    scan();
+    
+    
    
 
 }
 
-void Enroll(void) {
-	int capted = 0;
-	while(is_press_finger() != 1);
-	capted = capture_finger(1);
-	
-	if (capted == 1) {
-		enroll_start(0);
-		clearlcd();
-   		pmsglcd("remove finger");
-		enroll1();
-		while(is_press_finger() == 1);
-		clearlcd();
-		pmsglcd("press again");
-		while(is_press_finger() != 1);
-		capted = capture_finger(1);
-	
-		if (capted == 1) { 
-			clearlcd();
-			pmsglcd("remove finger");
-			enroll2();
-			while(is_press_finger() == 1);
-			clearlcd();
-			pmsglcd("press again");
-			while(is_press_finger() != 1);
-			capted = capture_finger(1);
-			if (capted == 1) { 
-				clearlcd();
-				pmsglcd("remove finger");
-				enroll3();
-			}
-			else {
-				clearlcd();
-				pmsglcd("failed 3rd");
-			}
-		}
-		else {
-			clearlcd();
-			pmsglcd("failed 2nd");
-		}
-			
-	}
-	else {
-		clearlcd();
-   		pmsglcd("Could not read");
-	}
-	return;
+int scan() {
+    int unlock = 0; 
+    while (PTAD_PTAD1 == 0) {
+     PTT_PTT4 = 0;
+     PTT_PTT5 = 1; 
+    }
+    PTT_PTT4 = 0;
+    PTT_PTT5 = 0;
+    
+    while (PTAD_PTAD2 == 0) {    
+    }
+    return PTAD_PTAD1;
 }
+
 
 void unlock(){ //Counterclockwise
   PWMDTY0 = 50;
@@ -244,7 +218,6 @@ void main(void){
 	
   for(;;) {
     cycles = 70000;
-    id = 0;
   /*
     if(is_press_finger()) {   	
     	clearlcd();
@@ -532,537 +505,3 @@ void outchar(unsigned char x) {
     SCIDRL = x;
 }
 
-unsigned char GetHighByte(unsigned int w)
-{
-    return (unsigned char)(w>>8)&0x00FF;
-}
-
-unsigned char GetLowByte(unsigned int w)
-{
-    return (unsigned char)w&0x00FF;
-}
-
-unsigned int byte_to_word(unsigned char* arr)
-{
-    unsigned int a = 0;
-    int i = 0;
-    for(i = 0; i< 2; i++) {
-        a += arr[i];
-        a = a<<8;
-    }
-    return a;
-}
-
-unsigned int _CalculateChecksumOut(struct command_packet* pack)
-{
-    unsigned char* Parameter = pack->Parameter;
-    unsigned char* command = pack-> command;
-    unsigned int w = 0;
-    w += COMMAND_START_CODE_1;
-    w += COMMAND_START_CODE_2;
-    w += COMMAND_DEVICE_ID_1;
-    w += COMMAND_DEVICE_ID_2;
-    w += Parameter[0];
-    w += Parameter[1];
-    w += Parameter[2];
-    w += Parameter[3];
-    w += command[0];
-    w += command[1];
-    
-    return w;
-}
-
-unsigned char* GetPacketBytes(struct command_packet* pack)
-{
-    unsigned char* Parameter = pack->Parameter;
-    unsigned char* command = pack-> command;
-    static unsigned char packetbytes[12];
-    unsigned int checksum = 0;
-    // update command before calculating checksum (important!)
-    unsigned int cmd = byte_to_word(command);
-    command[0] = GetLowByte(cmd);
-    command[1] = GetHighByte(cmd);
-    
-     checksum = _CalculateChecksumOut(pack);
-    
-
-    packetbytes[0] = COMMAND_START_CODE_1;
-    packetbytes[1] = COMMAND_START_CODE_2;
-    packetbytes[2] = COMMAND_DEVICE_ID_1;
-    packetbytes[3] = COMMAND_DEVICE_ID_2;
-    packetbytes[4] = Parameter[0];
-    packetbytes[5] = Parameter[1];
-    packetbytes[6] = Parameter[2];
-    packetbytes[7] = Parameter[3];
-    packetbytes[8] = command[0];
-    packetbytes[9] = command[1];
-    packetbytes[10]= GetLowByte(checksum);
-    packetbytes[11]= GetHighByte(checksum);
-                         
-    return packetbytes;  
-}
-
-
-// returns the 12 bytes of the generated command packet
-// remember to call delete on the returned array
-
-
-
-
-
-
-
-int CheckParsing(unsigned char b, unsigned char propervalue, unsigned char alternatevalue)
-{
-    int retval = (b != propervalue) && (b != alternatevalue);
-    
-    return retval;
-}
-/*
-void Response_Packet(unsigned char* buffer, struct response_packet* pack)
-{
-    unsigned char* ParameterBytes = pack->ParameterBytes;
-    unsigned char* ResponseBytes = pack->ResponseBytes;
-    unsigned char* RawBytes = pack->RawBytes;
-    //CheckParsing(buffer[0], COMMAND_START_CODE_1, COMMAND_START_CODE_1, "COMMAND_START_CODE_1");
-    //CheckParsing(buffer[1], COMMAND_START_CODE_2, COMMAND_START_CODE_2, "COMMAND_START_CODE_2");
-    //CheckParsing(buffer[2], COMMAND_DEVICE_ID_1, COMMAND_DEVICE_ID_1, "COMMAND_DEVICE_ID_1");
-    //CheckParsing(buffer[3], COMMAND_DEVICE_ID_2, COMMAND_DEVICE_ID_2, "COMMAND_DEVICE_ID_2");
-    int z = 0;
-    z = CheckParsing(buffer[8], 0x30, 0x31);
-    if (buffer[8] == 0x30) {
-        ACK = 1;
-    }
-    else {
-        ACK = 0;
-    }
-    z = CheckParsing(buffer[9], 0x00, 0x00);
-    
-    unsigned int checksum = 0;
-    checksum = CalculateChecksumIn(buffer, 10);
-    unsigned char checksum_low = GetLowByte(checksum);
-    unsigned char checksum_high = GetHighByte(checksum);
-    CheckParsing(buffer[10], checksum_low, checksum_low);
-    CheckParsing(buffer[11], checksum_high, checksum_high);
-    
-    //int Error = ParseFromBytes(buffer[5], buffer[4]);
-    
-    ParameterBytes[0] = buffer[4];
-    ParameterBytes[1] = buffer[5];
-    ParameterBytes[2] = buffer[6];
-    ParameterBytes[3] = buffer[7];
-    ResponseBytes[0]=buffer[8];
-    ResponseBytes[1]=buffer[9];
-    int i = 0;
-    for (i=0; i < 12; i++)
-    {
-        RawBytes[i]=buffer[i];
-    }
-}*/ 
-
-unsigned int CalculateChecksumIn(unsigned char* buffer, int length)
-{
-    unsigned int checksum = 0;
-    int i = 0;
-    for (i=0; i<length; i++)
-    {
-        checksum +=buffer[i];
-    }
-    return checksum;
-}
-
-void input_cmd(unsigned char cmd, unsigned char* arr ) {
-    arr[0] = 0x00;
-    arr[1] = cmd;
-}
-
-void open() {
-    
-    static struct command_packet cp;    
-    static unsigned char* packetbytes;
-    unsigned int w = 0;
-    int i = 0;
-    char* rp;
-    
-    input_cmd(Open, cp.command);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    return ;
-}
-
-void close()
-{
-    
-    
-    struct command_packet cp;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    input_cmd(Close, cp.command);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();      
-    
-}
-
-void ParameterFromInt(int i, unsigned char* Parameter)
-{
-    Parameter[0] = (i & 0x000000ff);
-    Parameter[1] = (i & 0x0000ff00) >> 8;
-    Parameter[2] = (i & 0x00ff0000) >> 16;
-    Parameter[3] = (i & 0xff000000) >> 24;
-}
-
-void SendCommand(unsigned char cmd[12], int length)
-{
-    int i = 0;
-    for(i = 0; i< length; i++) {
-       outchar(cmd[i]);
-    }
-}
-
-char* GetResponse(void) {
-	  char rp[6];
-	  int x = 1;
-    
-    char packet[12];
-    char byte = 0x00;
-    int done = 0;
-    
-    /*while (done == 0) {
-        byte = inchar();
-    if(byte == COMMAND_START_CODE_1)
-            done = 1;
-        
-    }*/
-    //packet[0] = byte;
-    
-    for (x = 0; x <12; x++) {
-        byte = inchar();
-        packet[x] = byte;
-        
-    }
-    rp[0] = packet[4];
-    rp[1] = packet[5];
-    rp[2] = packet[6];
-    rp[3] = packet[7];
-    rp[4]=  packet[8];
-    rp[5]=  packet[9];
-    
-    
-	return rp;
-}
-  
-
-
- 
-
-int is_press_finger()
-{
-    
-    unsigned int w = 0;
-    char* rp;
-    int retval = 0;
-    int pval = 0;
-    struct command_packet cp;
-    static unsigned char* packetbytes;
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    input_cmd(IsPressFinger, cp.command);
-    
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    
-    pval = rp[0];
-    pval += rp[1];
-    pval += rp[2];
-    pval += rp[3];
-    if (pval == 0)
-       retval = 1;
-    return retval;  
-    //return 0;
-}
-
-int ChangeBaudRate(unsigned long baud)
-{
-    struct command_packet cp;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    int retval = ACK;
-    if ((baud == 9600) || (baud == 19200) || (baud == 38400) || (baud == 57600) || (baud == 115200))
-    {
-        
-        
-        
-        input_cmd(Open, cp.command);
-        ParameterFromInt(baud, cp.Parameter);
-        packetbytes = GetPacketBytes(&cp);
-        SendCommand(packetbytes, 12);
-        rp = GetResponse();
-        if (retval)
-        {
-            //_serial.end();
-            //_serial.begin(baud);
-        }
-        
-        return retval;
-    }    
-    return 0;
-}
-
-int SetLED(int on)
-{
-    struct command_packet cp;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    int retval = 1;
-    input_cmd(CmosLed, cp.command);
-    if (on)
-    {
-        cp.Parameter[0] = 0x01;
-    }
-    else
-    {
-        
-        cp.Parameter[0] = 0x00;
-    }
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    packetbytes = GetPacketBytes(&cp);
-    lcdwait();
-    lcdwait();
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();      
-    
-    //if (ACK == 0)
-    //    retval = 0;
-    //return retval; 
-      return 0;
-}
-
-int IntFromParameter(char* ParameterBytes) {
-    int retval = 0;
-    retval = (retval << 8) + ParameterBytes[3];
-    retval = (retval << 8) + ParameterBytes[2];
-    retval = (retval << 8) + ParameterBytes[1];
-    retval = (retval << 8) + ParameterBytes[0];
-    return retval;
-}
-
-int get_enroll_count()
-{
-    struct command_packet cp;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    int retval = 0;
-    input_cmd(GetEnrollCount, cp.command);
-    cp.Parameter[0] = 0x00;
-    cp.Parameter[1] = 0x00;
-    cp.Parameter[2] = 0x00;
-    cp.Parameter[3] = 0x00;
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    
-    retval = IntFromParameter(rp); 
-    return retval;
-}
-
-int check_enrolled(int id)
-{
-    
-    struct command_packet cp;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    int retval = 0;
-    input_cmd(CheckEnrolled, cp.command);
-    ParameterFromInt(id, cp.Parameter);
-    packetbytes = GetPacketBytes(&cp); 
-    SendCommand(packetbytes, 12);
-    
-    rp = GetResponse();   
-    retval = ACK;
-    return retval;
-}
-
-int enroll_start(int id)
-{
-    struct command_packet cp;
-    int retval = 0;
-    unsigned char* packetbytes = 0;
-    char* rp = 0;
-    input_cmd(EnrollStart, cp.command);
-    ParameterFromInt(id, cp.Parameter);
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();      
-    
-    if (ACK == 0)
-    {
-        if (Error == NACK_DB_IS_FULL)
-            retval = 1;
-        if (Error == NACK_INVALID_POS)
-            retval = 2;
-        if (Error == NACK_IS_ALREADY_USED)
-            retval = 3;
-    }
-    
-    return retval;
-}
-
-int enroll1()
-{
-    struct command_packet cp;
-    int retval = 0;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    input_cmd(Enroll1, cp.command);
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    retval = IntFromParameter(rp);
-    if (retval < 20)
-        retval = 3;
-    else
-        retval = 0;
-    
-    if (ACK == 0)
-    {
-        if (Error == NACK_ENROLL_FAILED)
-            retval = 1;
-        if (Error == NACK_BAD_FINGER)
-            retval = 2;
-    }
-    
-    if (ACK == 1)
-        return 0;
-    else
-        return retval;
-}
-
-int enroll2()
-{
-    struct command_packet cp;
-    int retval = 0;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    input_cmd(Enroll2, cp.command);
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    retval = IntFromParameter(rp);
-    if (retval < 20)
-        retval = 3;
-    else
-        retval = 0;
-    
-    if (ACK == 0)
-    {
-        if (Error == NACK_ENROLL_FAILED)
-            retval = 1;
-        if (Error == NACK_BAD_FINGER)
-            retval = 2;
-    }
-    
-    if (ACK == 1)
-        return 0;
-    else
-        return retval;
-}
-
-int enroll3()
-{
-    struct command_packet cp;
-    int retval = 0;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    input_cmd(Enroll3, cp.command);
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    retval = IntFromParameter(rp);
-    if (retval < 20)
-        retval = 3;
-    else
-        retval = 0;
-    
-    if (ACK == 0)
-    {
-        if (Error == NACK_ENROLL_FAILED)
-            retval = 1;
-        if (Error == NACK_BAD_FINGER)
-            retval = 2;
-    }
-    
-    if (ACK == 1)
-        return 0;
-    else
-        return retval;
-}
-
-int identify1_N()
-{
-     struct command_packet cp;
-    int retval = 0;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    input_cmd(Enroll3, cp.command);
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    retval = IntFromParameter(rp);
-    if (retval > 20)
-        retval = 20;
-    return retval;
-}
-
-int capture_finger(int highquality)
-{
-     struct command_packet cp;
-    int retval = 0;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    input_cmd(Enroll3, cp.command);
-    
-    if (highquality)
-    {
-        ParameterFromInt(1, cp.Parameter);
-    }
-    else
-    {
-        ParameterFromInt(0, cp.Parameter);
-    }
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    retval = ACK;
-    return retval;
-    
-}
-
-int delete_ID(int id)
-{
-     struct command_packet cp;
-    int retval = 0;
-    static unsigned char* packetbytes;
-    char* rp = 0;
-    input_cmd(DeleteID, cp.command);
-    ParameterFromInt(id, cp.Parameter);
-    packetbytes = GetPacketBytes(&cp);
-    SendCommand(packetbytes, 12);
-    rp = GetResponse();
-    retval = ACK;
-    return retval;
-}                 
